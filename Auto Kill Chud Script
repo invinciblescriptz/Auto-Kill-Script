@@ -6,6 +6,7 @@ local whitelist = {
     ["alexglover020"] = true,
 }
 
+-- Server whitelist kick (if this runs on server)
 Players.PlayerAdded:Connect(function(player)
     if not whitelist[player.Name] then
         player:Kick("You are not whitelisted.")
@@ -19,6 +20,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local GuiService = game:GetService("GuiService")
+local TeleportService = game:GetService("TeleportService")  -- FIXED: was missing
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -117,12 +119,6 @@ titleBar.InputBegan:Connect(function(input)
         dragging = true
         dragStart = input.Position
         startPos = window.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
     end
 end)
 
@@ -153,8 +149,38 @@ listLayout.Padding = UDim.new(0, 12)
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Parent = scrolling
 
--- Mobile scrolling fix
 scrolling.ScrollBarImageTransparency = 0.3
+
+-- ==================== BETTER MOBILE SCALING ====================
+local function updateForMobile()
+    local viewport = workspace.CurrentCamera.ViewportSize
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+    
+    if isMobile then
+        local heightScale = math.clamp(viewport.Y / 720, 0.65, 1)  -- Better fit for phones
+        local newWidth = math.floor(440 * heightScale)
+        local newHeight = math.floor(580 * heightScale)
+        
+        originalSize = UDim2.new(0, newWidth, 0, newHeight)
+        minimizedSize = UDim2.new(0, newWidth, 0, math.floor(60 * heightScale))
+        
+        window.Size = originalSize
+        window.Position = UDim2.new(0.5, -newWidth/2, 0.5, -newHeight/2)
+        
+        -- Smaller UI elements on very small screens
+        if viewport.Y < 600 then
+            scrolling.Size = UDim2.new(1, -20, 1, -70)
+        end
+    end
+end
+
+updateForMobile()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateForMobile)
+
+-- Prevent GUI from being hidden by Roblox mobile controls
+GuiService:SetTopbarInset(false)
+
+print("VoidUI Loaded - Mobile Optimized ✅")
 
 -- ==================== MINIMIZE ====================
 local function toggleMinimize()
@@ -172,9 +198,9 @@ local function toggleMinimize()
 end
 
 minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
-minimizeBtn.TouchTap:Connect(toggleMinimize) -- Extra mobile support
+minimizeBtn.TouchTap:Connect(toggleMinimize)
 
--- ==================== UI FUNCTIONS ====================
+-- ==================== UI FUNCTIONS (unchanged) ====================
 local function CreateButton(parent, text, callback)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, 0, 0, 55)
@@ -200,7 +226,7 @@ local function CreateButton(parent, text, callback)
     end
 
     btn.MouseButton1Click:Connect(onClick)
-    btn.TouchTap:Connect(onClick) -- Mobile support
+    btn.TouchTap:Connect(onClick)
 end
 
 local function CreateToggle(text, default, callback)
@@ -247,7 +273,7 @@ local function CreateToggle(text, default, callback)
         updateToggle()
     end)
 
-    toggle.TouchTap:Connect(function() -- Mobile
+    toggle.TouchTap:Connect(function()
         state = not state
         updateToggle()
     end)
@@ -266,28 +292,7 @@ local function CreateLabel(text)
     return label
 end
 
--- ==================== MOBILE OPTIMIZATIONS ====================
--- Auto scale for mobile
-local function updateForMobile()
-    local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-    if isMobile then
-        -- Slightly smaller on very small screens
-        if workspace.CurrentCamera.ViewportSize.Y < 600 then
-            window.Size = UDim2.new(0, 380, 0, 520)
-            originalSize = window.Size
-        end
-    end
-end
-
-updateForMobile()
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateForMobile)
-
--- Prevent GUI from being hidden by Roblox mobile controls
-GuiService:SetTopbarInset(false)
-
-print("VoidUI Loaded - Mobile Optimized ✅")
-
--- Auto Good Karma
+-- ==================== FEATURES (unchanged) ====================
 CreateToggle("Auto Good Karma", false, function(bool)
     autoGoodKarma = bool
     task.spawn(function()
@@ -317,7 +322,6 @@ CreateToggle("Auto Good Karma", false, function(bool)
     end)
 end)
 
--- Auto Bad Karma
 CreateToggle("Auto Bad Karma", false, function(bool)
     autoBadKarma = bool
     task.spawn(function()
@@ -347,7 +351,6 @@ CreateToggle("Auto Bad Karma", false, function(bool)
     end)
 end)
 
--- Auto Kill (All)
 CreateToggle("Auto Kill", false, function(bool)
     autoKill = bool
     task.spawn(function()
@@ -382,7 +385,6 @@ CreateToggle("Auto Kill", false, function(bool)
     end)
 end)
 
--- Auto Whitelist Friends
 CreateButton(nil, "Auto Whitelist Friends", function()
     friendWhitelistActive = not friendWhitelistActive
     if friendWhitelistActive then
@@ -411,7 +413,6 @@ end)
 
 CreateLabel("Misc")
 
--- Fast Punch
 CreateToggle("Fast Punch", false, function(state)
     _G.autoPunchActive = state
     if state then
@@ -439,7 +440,6 @@ CreateToggle("Fast Punch", false, function(state)
     end
 end)
 
--- Lock Position
 CreateToggle("Lock Position", false, function(Value)
     if Value then
         local currentPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame
@@ -459,7 +459,6 @@ CreateToggle("Lock Position", false, function(Value)
     end
 end)
 
--- NaN
 CreateToggle("NaN", false, function(state)
     local player = game.Players.LocalPlayer
     local targetCFrame = CFrame.new(
@@ -533,10 +532,8 @@ CreateToggle("NaN", false, function(state)
     end
 end)
 
--- Prevent Knockback
 CreateToggle("Prevent Knockback", false, function(state)
     getgenv().AntiKnockback = state
-    
     if state then
         print("✅ Anti Knockback ENABLED")
         spawn(function()
@@ -544,7 +541,6 @@ CreateToggle("Prevent Knockback", false, function(state)
                 pcall(function()
                     local character = game.Players.LocalPlayer.Character
                     if not character then return end
-                    
                     local root = character:FindFirstChild("HumanoidRootPart")
                     if root then
                         for _, v in pairs(root:GetChildren()) do
@@ -563,7 +559,6 @@ CreateToggle("Prevent Knockback", false, function(state)
     end
 end)
 
--- Hide Karma Frames
 CreateToggle("Hide Karma Frames", false, function(bool)
     local rSto = game:GetService("ReplicatedStorage")
     for _, obj in pairs(rSto:GetChildren()) do
@@ -573,7 +568,6 @@ CreateToggle("Hide Karma Frames", false, function(bool)
     end
 end)
 
--- Rejoin
 CreateButton(nil, "Rejoin Server", function()
     TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
 end)
