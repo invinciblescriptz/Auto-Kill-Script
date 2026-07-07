@@ -13,12 +13,12 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 local VoidUI = {}
+
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
+local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -50,6 +50,7 @@ local minimizedSize = UDim2.new(0, 440, 0, 60)
 local screen = Instance.new("ScreenGui")
 screen.Name = "VoidUI"
 screen.ResetOnSpawn = false
+screen.IgnoreGuiInset = true
 screen.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 -- Create Window
@@ -74,7 +75,6 @@ titleBar.Size = UDim2.new(1, 0, 0, 60)
 titleBar.BackgroundColor3 = THEME.Surface
 titleBar.BorderSizePixel = 0
 titleBar.Parent = window
-
 Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 16)
 
 local title = Instance.new("TextLabel")
@@ -99,11 +99,9 @@ minimizeBtn.Font = Enum.Font.GothamBold
 minimizeBtn.TextSize = 28
 minimizeBtn.Parent = titleBar
 
-local minimizeCorner = Instance.new("UICorner")
-minimizeCorner.CornerRadius = UDim.new(0, 8)
-minimizeCorner.Parent = minimizeBtn
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 8)
 
--- ==================== DRAG FUNCTIONALITY ====================
+-- ==================== MOBILE-FRIENDLY DRAG ====================
 local dragging = false
 local dragInput
 local dragStart
@@ -119,7 +117,7 @@ titleBar.InputBegan:Connect(function(input)
         dragging = true
         dragStart = input.Position
         startPos = window.Position
-
+        
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
@@ -147,6 +145,7 @@ scrolling.Position = UDim2.new(0, 15, 0, 70)
 scrolling.BackgroundTransparency = 1
 scrolling.ScrollBarThickness = 6
 scrolling.ScrollBarImageColor3 = THEME.Accent
+scrolling.ScrollingDirection = Enum.ScrollingDirection.Y
 scrolling.Parent = window
 
 local listLayout = Instance.new("UIListLayout")
@@ -154,17 +153,17 @@ listLayout.Padding = UDim.new(0, 12)
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Parent = scrolling
 
--- ==================== MINIMIZE FUNCTION ====================
+-- Mobile scrolling fix
+scrolling.ScrollBarImageTransparency = 0.3
+
+-- ==================== MINIMIZE ====================
 local function toggleMinimize()
     isMinimized = not isMinimized
-    
     if isMinimized then
-        -- Minimize
         minimizeBtn.Text = "+"
         TweenService:Create(window, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = minimizedSize}):Play()
-        scrolling.Visible = false
+        task.delay(0.2, function() scrolling.Visible = false end)
     else
-        -- Restore
         minimizeBtn.Text = "−"
         TweenService:Create(window, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = originalSize}):Play()
         task.wait(0.15)
@@ -173,6 +172,7 @@ local function toggleMinimize()
 end
 
 minimizeBtn.MouseButton1Click:Connect(toggleMinimize)
+minimizeBtn.TouchTap:Connect(toggleMinimize) -- Extra mobile support
 
 -- ==================== UI FUNCTIONS ====================
 local function CreateButton(parent, text, callback)
@@ -184,20 +184,23 @@ local function CreateButton(parent, text, callback)
     btn.Font = Enum.Font.GothamSemibold
     btn.TextSize = 17
     btn.Parent = parent or scrolling
-
+    
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
-
+    
     local s = Instance.new("UIStroke")
     s.Color = THEME.Accent
     s.Transparency = 0.65
     s.Parent = btn
 
-    btn.MouseButton1Click:Connect(function()
+    local function onClick()
         callback()
         TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = THEME.Accent}):Play()
         task.wait(0.12)
         TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Surface2}):Play()
-    end)
+    end
+
+    btn.MouseButton1Click:Connect(onClick)
+    btn.TouchTap:Connect(onClick) -- Mobile support
 end
 
 local function CreateToggle(text, default, callback)
@@ -232,11 +235,21 @@ local function CreateToggle(text, default, callback)
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
     local state = default
-    toggle.MouseButton1Click:Connect(function()
-        state = not state
+
+    local function updateToggle()
         TweenService:Create(toggle, TweenInfo.new(0.25), {BackgroundColor3 = state and THEME.Accent or THEME.Surface2}):Play()
         TweenService:Create(knob, TweenInfo.new(0.25), {Position = state and UDim2.new(1, -32, 0.5, -13.5) or UDim2.new(0, 3.5, 0.5, -13.5)}):Play()
         callback(state)
+    end
+
+    toggle.MouseButton1Click:Connect(function()
+        state = not state
+        updateToggle()
+    end)
+
+    toggle.TouchTap:Connect(function() -- Mobile
+        state = not state
+        updateToggle()
     end)
 end
 
@@ -253,7 +266,24 @@ local function CreateLabel(text)
     return label
 end
 
--- ==================== FEATURES ====================
+-- ==================== MOBILE OPTIMIZATIONS ====================
+-- Auto scale for mobile
+local function updateForMobile()
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+    if isMobile then
+        -- Slightly smaller on very small screens
+        if workspace.CurrentCamera.ViewportSize.Y < 600 then
+            window.Size = UDim2.new(0, 380, 0, 520)
+            originalSize = window.Size
+        end
+    end
+end
+
+updateForMobile()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateForMobile)
+
+-- Prevent GUI from being hidden by Roblox mobile controls
+GuiService:SetTopbarInset(false)
 
 -- Auto Good Karma
 CreateToggle("Auto Good Karma", false, function(bool)
